@@ -9,6 +9,40 @@ import type { ClientFrame, ServerFrame } from "../src/shared/protocol.js";
 import type { TeamSnapshot } from "../src/shared/types.js";
 
 describe("npm entry websocket launch", () => {
+  it("exits on SIGINT while a websocket is still open", async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), "pi-bot-sigint-"));
+    const port = await freePort();
+    const child = spawn(
+      process.execPath,
+      [
+        "dist/cli.js",
+        "--demo",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        String(port),
+        "--data-dir",
+        dataDir,
+      ],
+      { cwd: process.cwd(), stdio: ["ignore", "pipe", "pipe"] },
+    );
+    const logs: string[] = [];
+    child.stdout?.on("data", (chunk) => logs.push(String(chunk)));
+    child.stderr?.on("data", (chunk) => logs.push(String(chunk)));
+    try {
+      await waitForHealth(port);
+      const ws = await openWs(port);
+      const exited = waitForExit(child, 2500);
+      child.kill("SIGINT");
+      const code = await exited;
+      expect(code, logs.join("")).not.toBeNull();
+      ws.terminate();
+    } catch (error) {
+      child.kill("SIGKILL");
+      throw new Error(`${String(error)}\n${logs.join("")}`);
+    }
+  });
+
   it("hires a bot and creates a routine twice on a fresh server", async () => {
     const first = await runLaunch("Launch One");
     const second = await runLaunch("Launch Two");
@@ -169,5 +203,18 @@ function stop(child: ChildProcess): Promise<void> {
     child.once("exit", () => resolve());
     child.kill("SIGTERM");
     setTimeout(() => child.kill("SIGKILL"), 1000).unref();
+  });
+}
+
+function waitForExit(child: ChildProcess, timeoutMs: number): Promise<number | null> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`process still running after ${timeoutMs}ms`)),
+      timeoutMs,
+    );
+    child.once("exit", (code) => {
+      clearTimeout(timer);
+      resolve(code);
+    });
   });
 }

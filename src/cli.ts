@@ -34,11 +34,31 @@ async function main(argv: string[]): Promise<void> {
   process.stdout.write(`  agentDir  ${running.agentDir}\n`);
   if (options.open) openBrowser(running.url);
 
-  const shutdown = () => {
-    void running.close().finally(() => process.exit(0));
+  installShutdown(running.close);
+}
+
+export function installShutdown(close: () => Promise<void>): void {
+  let stopping = false;
+  const stop = () => {
+    if (stopping) {
+      process.exit(1);
+      return;
+    }
+    stopping = true;
+    process.stdout.write("\npi-bot stopping\n");
+    const force = setTimeout(() => process.exit(1), 1500);
+    force.unref();
+    void close()
+      .catch((error: unknown) => {
+        process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+      })
+      .finally(() => {
+        clearTimeout(force);
+        process.exit(0);
+      });
   };
-  process.on("SIGINT", shutdown);
-  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", stop);
+  process.on("SIGTERM", stop);
 }
 
 export function parseArgs(argv: string[]): StartOptions & { open?: boolean } {

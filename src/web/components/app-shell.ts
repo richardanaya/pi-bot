@@ -16,13 +16,18 @@ export class AppShell extends LitElement {
     :host {
       display: grid;
       grid-template-columns: 260px minmax(0, 1fr) 280px;
+      grid-template-rows: minmax(0, 1fr);
+      width: 100%;
       height: 100%;
+      max-height: 100%;
+      overflow: hidden;
       background: var(--bg);
     }
     .pane {
       min-width: 0;
       min-height: 0;
       height: 100%;
+      overflow: hidden;
     }
     .left,
     .right {
@@ -47,7 +52,7 @@ export class AppShell extends LitElement {
     @media (max-width: 900px) {
       :host {
         grid-template-columns: 1fr;
-        grid-template-rows: 220px 1fr 240px;
+        grid-template-rows: 220px minmax(0, 1fr) 240px;
       }
       .left,
       .right {

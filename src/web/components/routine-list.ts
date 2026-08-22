@@ -15,6 +15,7 @@ export class RoutineList extends LitElement {
       flex-direction: column;
       height: 100%;
       min-height: 0;
+      overflow: hidden;
     }
     header {
       padding: 16px 16px 8px;

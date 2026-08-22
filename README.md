@@ -20,7 +20,7 @@ Requires Node 22+ and a working pi setup under `~/.pi` (auth, models, settings).
 npx pi-bot
 ```
 
-Then open `http://127.0.0.1:3847`. The process binds localhost only.
+Then open `http://127.0.0.1:3141`. The process binds localhost only.
 
 From a checkout:
 
@@ -81,7 +81,7 @@ The focused chat is a Lit web component. It renders GitHub-flavored markdown, in
 npx pi-bot [options]
 
   --host <addr>       default 127.0.0.1
-  --port <n>          default 3847 (0 = ephemeral)
+  --port <n>          default 3141 (0 = ephemeral)
   --demo              mock model replies
   --cwd <dir>         working directory for pi tools
   --data-dir <dir>    roster/media (default ~/.pi/pi-bot)
@@ -109,6 +109,17 @@ npm run format
 - `src/server/pi-session.ts` — `createAgentSession` with `~/.pi` + those tools
 - `src/server/ws.ts` / `http.ts` — local server
 - `src/web/components/` — Lit panes (bots, chat, routines)
+
+## Publish
+
+The package name `pi-bot` is public on npm. `prepack` builds `dist/` so a publish always ships the CLI and bundled UI.
+
+```bash
+npm login
+npm publish
+```
+
+After that, `npx pi-bot` installs from the registry.
 
 ## License
 

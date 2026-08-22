@@ -62,7 +62,7 @@ export async function startPiBot(options: StartOptions = {}): Promise<RunningSer
     });
   });
 
-  attachWebsocket(server, { team, pool, demo, cwd, agentDir });
+  const sockets = attachWebsocket(server, { team, pool, demo, cwd, agentDir });
   const port = await listen(server, host, requestedPort);
   const url = `http://${host}:${port}`;
 
@@ -72,12 +72,21 @@ export async function startPiBot(options: StartOptions = {}): Promise<RunningSer
     port,
     demo,
     agentDir,
-    close: () =>
-      new Promise((resolve, reject) => {
-        pool.dispose();
-        server.close((error) => (error ? reject(error) : resolve()));
-      }),
+    close: () => closeServer(server, sockets.close, pool),
   };
+}
+
+async function closeServer(
+  server: Server,
+  closeSockets: () => Promise<void>,
+  pool: SessionPool,
+): Promise<void> {
+  pool.dispose();
+  await closeSockets();
+  server.closeAllConnections();
+  await new Promise<void>((resolve, reject) => {
+    server.close((error) => (error ? reject(error) : resolve()));
+  });
 }
 
 function listen(server: Server, host: string, port: number): Promise<number> {

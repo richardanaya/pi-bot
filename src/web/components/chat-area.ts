@@ -13,9 +13,11 @@ export class ChatArea extends LitElement {
   static styles = css`
     :host {
       display: grid;
-      grid-template-rows: auto 1fr auto;
+      grid-template-rows: auto minmax(0, 1fr) auto;
       min-width: 0;
+      min-height: 0;
       height: 100%;
+      overflow: hidden;
       background: var(--bg);
     }
     header {
@@ -40,6 +42,7 @@ export class ChatArea extends LitElement {
       letter-spacing: 0.04em;
     }
     .log {
+      min-height: 0;
       overflow: auto;
       padding: 20px;
       display: flex;

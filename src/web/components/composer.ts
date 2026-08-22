@@ -13,6 +13,7 @@ export class ChatComposer extends LitElement {
     :host {
       display: block;
       padding: 12px 16px 16px;
+      min-height: 0;
     }
     .box {
       border: 1px solid var(--line);

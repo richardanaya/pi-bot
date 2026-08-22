@@ -3,13 +3,16 @@ import { customElement, property, state } from "lit/decorators.js";
 
 @customElement("hire-dialog")
 export class HireDialog extends LitElement {
-  @property({ type: Boolean }) open = false;
+  @property({ type: Boolean, reflect: true }) open = false;
   @state() private name = "";
   @state() private job = "";
   @state() private instructions = "";
 
   static styles = css`
     :host {
+      display: none;
+    }
+    :host([open]) {
       display: contents;
     }
     .backdrop {

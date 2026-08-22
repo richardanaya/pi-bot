@@ -1,0 +1,8 @@
+*.map
+*.d.ts
+src
+test
+coverage
+playwright-report
+test-results
+.pi-bot-e2e

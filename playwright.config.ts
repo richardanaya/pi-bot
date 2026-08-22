@@ -8,15 +8,15 @@ export default defineConfig({
   reporter: [["list"]],
   use: {
     ...devices["Desktop Chrome"],
-    baseURL: "http://127.0.0.1:3847",
+    baseURL: "http://127.0.0.1:13141",
     headless: true,
     trace: "off",
     viewport: { width: 1400, height: 900 },
   },
   webServer: {
     command:
-      "rm -rf .pi-bot-e2e && node dist/cli.js --demo --host 127.0.0.1 --port 3847 --data-dir .pi-bot-e2e",
-    url: "http://127.0.0.1:3847/health",
+      "rm -rf .pi-bot-e2e && node dist/cli.js --demo --host 127.0.0.1 --port 13141 --data-dir .pi-bot-e2e",
+    url: "http://127.0.0.1:13141/health",
     reuseExistingServer: false,
     timeout: 30_000,
     env: {

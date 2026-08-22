@@ -1,5 +1,26 @@
 import { expect, test, type Page } from "@playwright/test";
 
+test("the app shell fits the window without document scroll", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByTestId("bots-pane")).toBeVisible();
+  const metrics = await page.evaluate(() => {
+    const html = document.documentElement;
+    const body = document.body;
+    const shell = document.querySelector("app-shell");
+    return {
+      htmlScroll: html.scrollHeight,
+      htmlClient: html.clientHeight,
+      bodyScroll: body.scrollHeight,
+      bodyClient: body.clientHeight,
+      shellHeight: shell?.getBoundingClientRect().height ?? 0,
+      innerHeight: window.innerHeight,
+    };
+  });
+  expect(metrics.htmlScroll, JSON.stringify(metrics)).toBeLessThanOrEqual(metrics.htmlClient);
+  expect(metrics.bodyScroll, JSON.stringify(metrics)).toBeLessThanOrEqual(metrics.bodyClient);
+  expect(metrics.shellHeight, JSON.stringify(metrics)).toBeLessThanOrEqual(metrics.innerHeight);
+});
+
 test("three panes, hire, markdown media, and routines", async ({ page }) => {
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));

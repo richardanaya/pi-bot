@@ -14,6 +14,7 @@ export class BotList extends LitElement {
       flex-direction: column;
       min-height: 0;
       height: 100%;
+      overflow: hidden;
     }
     header {
       display: flex;

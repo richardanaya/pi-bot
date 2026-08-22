@@ -15,7 +15,7 @@ export interface WsContext {
 export function attachWebsocket(
   server: import("node:http").Server,
   ctx: WsContext,
-): WebSocketServer {
+): { close: () => Promise<void> } {
   const wss = new WebSocketServer({ server, path: "/ws" });
   const clients = new Set<WebSocket>();
 
@@ -82,7 +82,14 @@ export function attachWebsocket(
     socket.on("close", () => clients.delete(socket));
   });
 
-  return wss;
+  return {
+    close: () =>
+      new Promise((resolve) => {
+        for (const client of wss.clients) client.terminate();
+        for (const client of clients) client.terminate();
+        wss.close(() => resolve());
+      }),
+  };
 }
 
 async function handleFrame(
