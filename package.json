@@ -1,0 +1,61 @@
+{
+  "name": "pi-bot",
+  "version": "0.1.0",
+  "description": "Local Grok Bot-style team of pi coding agents: hire bots, chat, routines, and cross-bot handoffs.",
+  "type": "module",
+  "bin": {
+    "pi-bot": "dist/cli.js"
+  },
+  "main": "./dist/cli.js",
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "npm run build:server && npm run build:web",
+    "build:server": "tsc -p tsconfig.json",
+    "build:web": "node scripts/build-web.mjs",
+    "start": "node dist/cli.js",
+    "demo": "node dist/cli.js --demo",
+    "test": "npm run build && vitest run && playwright test",
+    "test:unit": "vitest run",
+    "test:e2e": "playwright test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/richardanaya/pi-bot.git"
+  },
+  "keywords": [
+    "pi",
+    "agent",
+    "bots",
+    "websocket"
+  ],
+  "author": "Richard Anaya",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "0.84.2",
+    "lit": "3.3.3",
+    "marked": "18.0.10",
+    "sanitize-html": "2.17.0",
+    "typebox": "1.3.7",
+    "ws": "8.21.3"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.1",
+    "@types/node": "24.3.0",
+    "@types/sanitize-html": "2.16.0",
+    "@types/ws": "8.18.1",
+    "esbuild": "0.28.2",
+    "prettier": "3.9.6",
+    "typescript": "7.0.2",
+    "vitest": "4.1.11"
+  }
+}

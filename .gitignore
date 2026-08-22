@@ -1,0 +1,10 @@
+node_modules
+dist
+coverage
+playwright-report
+test-results
+blob-report
+.pi-bot-e2e
+*.log
+*.tgz
+.DS_Store
