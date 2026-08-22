@@ -6,7 +6,7 @@ import { startPiBot, type StartOptions } from "./server/app.js";
 const help = `pi-bot — local Grok Bot-style team of pi coding agents
 
 Usage:
-  npx pi-bot [options]
+  npx @richardanaya/pi-bot [options]
 
 Options:
   --host <addr>       Bind address (default: ${DEFAULT_HOST}, local only)

@@ -19,6 +19,16 @@ export interface Bot {
   createdAt: number;
   hiredBy?: string;
   error?: string;
+  pinned?: boolean;
+  pinOrder?: number;
+  groupId?: string;
+}
+
+export interface BotGroup {
+  id: string;
+  name: string;
+  collapsed?: boolean;
+  createdAt: number;
 }
 
 export interface ChatMessage {
@@ -30,8 +40,14 @@ export interface ChatMessage {
   streaming?: boolean;
   fromBotId?: string;
   fromBotName?: string;
+  toBotId?: string;
+  toBotName?: string;
   hops?: number;
   toolName?: string;
+  toolCallId?: string;
+  toolInput?: unknown;
+  toolOutput?: unknown;
+  toolError?: boolean;
   attachments?: Attachment[];
 }
 
@@ -42,10 +58,13 @@ export interface Routine {
   instruction: string;
   createdAt: number;
   lastRunAt?: number;
+  /** 5-field cron (minute hour day month weekday). Empty/undefined = manual only. */
+  schedule?: string;
 }
 
 export interface TeamSnapshot {
   bots: Bot[];
+  groups: BotGroup[];
   routines: Routine[];
   chats: Record<string, ChatMessage[]>;
   focusedBotId: string | null;

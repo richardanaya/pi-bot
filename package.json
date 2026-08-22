@@ -1,6 +1,6 @@
 {
-  "name": "pi-bot",
-  "version": "0.1.0",
+  "name": "@richardanaya/pi-bot",
+  "version": "0.2.0",
   "description": "Local Grok Bot-style team of pi coding agents: hire bots, chat, routines, and cross-bot handoffs.",
   "type": "module",
   "bin": {

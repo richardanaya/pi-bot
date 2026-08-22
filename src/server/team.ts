@@ -1,5 +1,13 @@
+import { normalizeSchedule } from "../shared/cron.js";
 import { newId } from "../shared/ids.js";
-import type { Bot, BotStatus, ChatMessage, Routine, TeamSnapshot } from "../shared/types.js";
+import type {
+  Bot,
+  BotGroup,
+  BotStatus,
+  ChatMessage,
+  Routine,
+  TeamSnapshot,
+} from "../shared/types.js";
 
 export const MAX_HANDOFF_HOPS = 3;
 
@@ -11,7 +19,9 @@ export type TeamEvent =
   | { type: "routine"; routine: Routine }
   | { type: "routine_removed"; routineId: string }
   | { type: "handoff"; fromBotId: string; toBotId: string; message: ChatMessage }
-  | { type: "status"; bot: Bot };
+  | { type: "status"; bot: Bot }
+  | { type: "group"; group: BotGroup }
+  | { type: "group_removed"; groupId: string };
 
 export type TeamListener = (event: TeamEvent) => void;
 
@@ -19,6 +29,7 @@ export class Team {
   private readonly bots = new Map<string, Bot>();
   private readonly chats = new Map<string, ChatMessage[]>();
   private readonly routines = new Map<string, Routine>();
+  private readonly groups = new Map<string, BotGroup>();
   private readonly inboundHops = new Map<string, number>();
   private readonly listeners = new Set<TeamListener>();
   private focusedId: string | null = null;
@@ -53,6 +64,10 @@ export class Team {
     return [...(this.chats.get(botId) ?? [])];
   }
 
+  listGroups(): BotGroup[] {
+    return [...this.groups.values()].sort((a, b) => a.createdAt - b.createdAt);
+  }
+
   listRoutines(botId?: string): Routine[] {
     const all = [...this.routines.values()].sort((a, b) => a.createdAt - b.createdAt);
     return botId ? all.filter((routine) => routine.botId === botId) : all;
@@ -65,6 +80,7 @@ export class Team {
     }
     return {
       bots: this.listBots(),
+      groups: this.listGroups(),
       routines: this.listRoutines(),
       chats,
       focusedBotId: this.focusedId,
@@ -91,6 +107,15 @@ export class Team {
     return { ...bot };
   }
 
+  updateBot(input: { botId: string; name: string; job: string; instructions?: string }): Bot {
+    const bot = this.requireBot(input.botId);
+    bot.name = required(input.name, "Bot name is required");
+    bot.job = required(input.job, "Bot job is required");
+    bot.instructions = input.instructions?.trim() ?? "";
+    this.emit({ type: "bot", bot: { ...bot } });
+    return { ...bot };
+  }
+
   focus(botId: string): Bot {
     const bot = this.requireBot(botId);
     this.focusedId = botId;
@@ -112,6 +137,61 @@ export class Team {
       this.emit({ type: "focus", botId: this.focusedId });
     }
     this.emit({ type: "bot_removed", botId });
+  }
+
+  pinBot(botId: string, pinned: boolean): Bot {
+    const bot = this.requireBot(botId);
+    bot.pinned = pinned;
+    if (pinned) {
+      const max = this.listBots().reduce((n, item) => Math.max(n, item.pinOrder ?? 0), 0);
+      bot.pinOrder = max + 1;
+    } else {
+      bot.pinOrder = undefined;
+    }
+    this.emit({ type: "bot", bot: { ...bot } });
+    return { ...bot };
+  }
+
+  createGroup(name: string): BotGroup {
+    const group: BotGroup = {
+      id: newId("grp"),
+      name: required(name, "Group name is required"),
+      createdAt: Date.now(),
+    };
+    this.groups.set(group.id, group);
+    this.emit({ type: "group", group: { ...group } });
+    return { ...group };
+  }
+
+  assignBotGroup(botId: string, groupId: string | null): Bot {
+    const bot = this.requireBot(botId);
+    if (groupId) {
+      if (!this.groups.has(groupId)) throw new Error(`Unknown group: ${groupId}`);
+      bot.groupId = groupId;
+    } else {
+      bot.groupId = undefined;
+    }
+    this.emit({ type: "bot", bot: { ...bot } });
+    return { ...bot };
+  }
+
+  setGroupCollapsed(groupId: string, collapsed: boolean): BotGroup {
+    const group = this.groups.get(groupId);
+    if (!group) throw new Error(`Unknown group: ${groupId}`);
+    group.collapsed = collapsed;
+    this.emit({ type: "group", group: { ...group } });
+    return { ...group };
+  }
+
+  deleteGroup(groupId: string): void {
+    if (!this.groups.delete(groupId)) throw new Error(`Unknown group: ${groupId}`);
+    for (const bot of this.bots.values()) {
+      if (bot.groupId === groupId) {
+        bot.groupId = undefined;
+        this.emit({ type: "bot", bot: { ...bot } });
+      }
+    }
+    this.emit({ type: "group_removed", groupId });
   }
 
   setStatus(botId: string, status: BotStatus, error?: string): Bot {
@@ -177,12 +257,19 @@ export class Team {
       text,
       fromBotId: from.id,
       fromBotName: from.name,
+      toBotId: to.id,
+      toBotName: to.name,
       hops,
     });
     this.appendMessage({
       botId: from.id,
-      role: "system",
-      text: `Sent to ${to.name}: ${text}`,
+      role: "handoff",
+      text,
+      fromBotId: from.id,
+      fromBotName: from.name,
+      toBotId: to.id,
+      toBotName: to.name,
+      hops,
     });
     this.emit({ type: "handoff", fromBotId: from.id, toBotId: to.id, message: inbound });
     return inbound;
@@ -192,7 +279,12 @@ export class Team {
     this.inboundHops.delete(botId);
   }
 
-  createRoutine(input: { botId: string; name: string; instruction: string }): Routine {
+  createRoutine(input: {
+    botId: string;
+    name: string;
+    instruction: string;
+    schedule?: string;
+  }): Routine {
     this.requireBot(input.botId);
     const name = required(input.name, "Routine name is required");
     const instruction = required(input.instruction, "Routine instruction is required");
@@ -202,8 +294,17 @@ export class Team {
       name,
       instruction,
       createdAt: Date.now(),
+      schedule: normalizeOptionalSchedule(input.schedule),
     };
     this.routines.set(routine.id, routine);
+    this.emit({ type: "routine", routine: { ...routine } });
+    return { ...routine };
+  }
+
+  updateRoutine(input: { routineId: string; schedule?: string }): Routine {
+    const routine = this.routines.get(input.routineId);
+    if (!routine) throw new Error(`Unknown routine: ${input.routineId}`);
+    routine.schedule = normalizeOptionalSchedule(input.schedule);
     this.emit({ type: "routine", routine: { ...routine } });
     return { ...routine };
   }
@@ -237,6 +338,7 @@ export class Team {
     this.bots.clear();
     this.chats.clear();
     this.routines.clear();
+    this.groups.clear();
     this.inboundHops.clear();
     for (const bot of snapshot.bots) {
       this.bots.set(bot.id, { ...bot, status: bot.status === "working" ? "idle" : bot.status });
@@ -246,6 +348,7 @@ export class Team {
       );
     }
     for (const routine of snapshot.routines) this.routines.set(routine.id, { ...routine });
+    for (const group of snapshot.groups ?? []) this.groups.set(group.id, { ...group });
     this.focusedId =
       snapshot.focusedBotId && this.bots.has(snapshot.focusedBotId)
         ? snapshot.focusedBotId
@@ -261,6 +364,10 @@ function required(value: string | undefined, message: string): string {
   const trimmed = value?.trim() ?? "";
   if (!trimmed) throw new Error(message);
   return trimmed;
+}
+
+function normalizeOptionalSchedule(value: string | undefined): string | undefined {
+  return normalizeSchedule(value);
 }
 
 function cloneMessage(message: ChatMessage): ChatMessage {

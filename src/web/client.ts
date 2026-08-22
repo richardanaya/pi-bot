@@ -4,11 +4,12 @@ import type { Attachment, Bot, ChatMessage, Routine, TeamSnapshot } from "../sha
 export type ClientListener = (frame: ServerFrame) => void;
 
 export class PiBotClient {
-  snapshot: TeamSnapshot = { bots: [], routines: [], chats: {}, focusedBotId: null };
+  snapshot: TeamSnapshot = { bots: [], groups: [], routines: [], chats: {}, focusedBotId: null };
   demo = false;
   cwd = "";
   agentDir = "";
   connected = false;
+  ready = false;
   lastError = "";
   private socket: WebSocket | null = null;
   private readonly listeners = new Set<ClientListener>();
@@ -70,13 +71,17 @@ export class PiBotClient {
       this.cwd = frame.cwd;
       this.agentDir = frame.agentDir;
     }
-    if (frame.type === "snapshot") this.snapshot = frame.snapshot;
+    if (frame.type === "snapshot") {
+      this.snapshot = { groups: [], ...frame.snapshot };
+      this.ready = true;
+    }
     if (frame.type === "bot") {
       this.snapshot.bots = upsert(this.snapshot.bots, frame.bot, (item) => item.id);
       if (!this.snapshot.chats[frame.bot.id]) this.snapshot.chats[frame.bot.id] = [];
     }
     if (frame.type === "bot_removed") {
       this.snapshot.bots = this.snapshot.bots.filter((bot) => bot.id !== frame.botId);
+      this.snapshot.routines = this.snapshot.routines.filter((item) => item.botId !== frame.botId);
       delete this.snapshot.chats[frame.botId];
       if (this.snapshot.focusedBotId === frame.botId) {
         this.snapshot.focusedBotId = this.snapshot.bots[0]?.id ?? null;
@@ -92,6 +97,15 @@ export class PiBotClient {
     }
     if (frame.type === "routine_removed") {
       this.snapshot.routines = this.snapshot.routines.filter((item) => item.id !== frame.routineId);
+    }
+    if (frame.type === "group") {
+      this.snapshot.groups = upsert(this.snapshot.groups, frame.group, (item) => item.id);
+    }
+    if (frame.type === "group_removed") {
+      this.snapshot.groups = this.snapshot.groups.filter((item) => item.id !== frame.groupId);
+      this.snapshot.bots = this.snapshot.bots.map((bot) =>
+        bot.groupId === frame.groupId ? { ...bot, groupId: undefined } : bot,
+      );
     }
     if (frame.type === "error") this.lastError = frame.message;
   }

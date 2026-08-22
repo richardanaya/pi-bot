@@ -61,6 +61,7 @@ export class SessionPool {
 
   async abort(botId: string): Promise<void> {
     await this.runtimes.get(botId)?.abort();
+    this.team.setStatus(botId, "idle");
   }
 
   dispose(): void {

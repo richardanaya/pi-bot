@@ -11,6 +11,8 @@ import "./routine-list.js";
 export class AppShell extends LitElement {
   private readonly client = new PiBotClient();
   @state() private hireOpen = false;
+  @state() private editBotId: string | null = null;
+  @state() private mentionQuery: string | null = null;
 
   static styles = css`
     :host {
@@ -31,8 +33,16 @@ export class AppShell extends LitElement {
     }
     .left,
     .right {
+      display: flex;
+      flex-direction: column;
       background: var(--panel);
       border-right: 1px solid var(--line);
+    }
+    .left > *,
+    .right > * {
+      flex: 1;
+      min-height: 0;
+      min-width: 0;
     }
     .right {
       border-right: 0;
@@ -76,35 +86,58 @@ export class AppShell extends LitElement {
       <section class="pane left">
         <bot-list
           .bots=${this.client.snapshot.bots}
+          .groups=${this.client.snapshot.groups}
           .focusedId=${this.client.snapshot.focusedBotId}
+          .ready=${this.client.ready}
+          .mentionQuery=${this.mentionQuery}
           @hire-click=${() => {
+            this.editBotId = null;
             this.hireOpen = true;
           }}
+          @edit-bot=${this.onEditBot}
           @focus-bot=${this.onFocus}
+          @pin-bot=${this.onPin}
+          @create-group=${this.onCreateGroup}
+          @assign-bot-group=${this.onAssignGroup}
+          @collapse-group=${this.onCollapseGroup}
+          @delete-group=${this.onDeleteGroup}
+          @fire-bot=${this.onFireBot}
         ></bot-list>
       </section>
       <section class="pane">
         <chat-area
           .bot=${focused}
+          .bots=${this.client.snapshot.bots}
           .messages=${this.client.messagesFor(this.client.snapshot.focusedBotId)}
+          .ready=${this.client.ready}
           @prompt=${this.onPrompt}
+          @abort-bot=${this.onAbort}
+          @mention-query=${this.onMentionQuery}
         ></chat-area>
       </section>
       <section class="pane right">
         <routine-list
           .bot=${focused}
           .routines=${this.client.routinesFor(this.client.snapshot.focusedBotId)}
-          @create-routine=${this.onCreateRoutine}
+          .ready=${this.client.ready}
+          @update-routine=${this.onUpdateRoutine}
           @run-routine=${this.onRunRoutine}
           @delete-routine=${this.onDeleteRoutine}
         ></routine-list>
       </section>
       <hire-dialog
         .open=${this.hireOpen}
+        .bot=${
+          this.editBotId
+            ? (this.client.snapshot.bots.find((bot) => bot.id === this.editBotId) ?? null)
+            : null
+        }
         @close=${() => {
           this.hireOpen = false;
+          this.editBotId = null;
         }}
         @hire=${this.onHire}
+        @save=${this.onSaveBot}
       ></hire-dialog>
       ${this.client.lastError ? html`<div class="banner">${this.client.lastError}</div>` : null}
     `;
@@ -112,6 +145,7 @@ export class AppShell extends LitElement {
 
   private onHire(event: CustomEvent<{ name: string; job: string; instructions: string }>) {
     this.hireOpen = false;
+    this.editBotId = null;
     this.client.send({
       type: "hire",
       name: event.detail.name,
@@ -120,8 +154,72 @@ export class AppShell extends LitElement {
     });
   }
 
+  private onEditBot(event: CustomEvent<{ botId: string }>) {
+    this.editBotId = event.detail.botId;
+    this.hireOpen = true;
+  }
+
+  private onSaveBot(
+    event: CustomEvent<{ botId: string; name: string; job: string; instructions: string }>,
+  ) {
+    this.hireOpen = false;
+    this.editBotId = null;
+    this.client.send({
+      type: "update_bot",
+      botId: event.detail.botId,
+      name: event.detail.name,
+      job: event.detail.job,
+      instructions: event.detail.instructions,
+    });
+  }
+
   private onFocus(event: CustomEvent<{ botId: string }>) {
     this.client.send({ type: "focus", botId: event.detail.botId });
+  }
+
+  private onPin(event: CustomEvent<{ botId: string; pinned: boolean }>) {
+    this.client.send({ type: "pin_bot", botId: event.detail.botId, pinned: event.detail.pinned });
+  }
+
+  private onCreateGroup(event: CustomEvent<{ name: string; botId?: string }>) {
+    this.client.send({
+      type: "create_group",
+      name: event.detail.name,
+      botId: event.detail.botId,
+    });
+  }
+
+  private onAssignGroup(event: CustomEvent<{ botId: string; groupId: string | null }>) {
+    this.client.send({
+      type: "assign_bot_group",
+      botId: event.detail.botId,
+      groupId: event.detail.groupId,
+    });
+  }
+
+  private onCollapseGroup(event: CustomEvent<{ groupId: string; collapsed: boolean }>) {
+    this.client.send({
+      type: "collapse_group",
+      groupId: event.detail.groupId,
+      collapsed: event.detail.collapsed,
+    });
+  }
+
+  private onDeleteGroup(event: CustomEvent<{ groupId: string }>) {
+    this.client.send({ type: "delete_group", groupId: event.detail.groupId });
+  }
+
+  private onFireBot(event: CustomEvent<{ botId: string }>) {
+    this.client.send({ type: "fire", botId: event.detail.botId });
+  }
+
+  private onAbort(event: CustomEvent<{ botId: string }>) {
+    this.client.send({ type: "abort", botId: event.detail.botId });
+  }
+
+  private onMentionQuery(event: CustomEvent<{ query: string | null }>) {
+    if (this.mentionQuery === event.detail.query) return;
+    this.mentionQuery = event.detail.query;
   }
 
   private onPrompt(event: CustomEvent<{ text: string; attachments: Attachment[] }>) {
@@ -135,14 +233,11 @@ export class AppShell extends LitElement {
     });
   }
 
-  private onCreateRoutine(
-    event: CustomEvent<{ botId: string; name: string; instruction: string }>,
-  ) {
+  private onUpdateRoutine(event: CustomEvent<{ routineId: string; schedule?: string }>) {
     this.client.send({
-      type: "create_routine",
-      botId: event.detail.botId,
-      name: event.detail.name,
-      instruction: event.detail.instruction,
+      type: "update_routine",
+      routineId: event.detail.routineId,
+      schedule: event.detail.schedule,
     });
   }
 

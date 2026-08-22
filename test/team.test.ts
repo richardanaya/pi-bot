@@ -86,4 +86,58 @@ describe("hire, focus, routines, and pi_bot_ handoff", () => {
       routine.instruction,
     );
   });
+
+  it("fires a bot and drops its chat and routines", () => {
+    const team = new Team();
+    const keeper = team.hire({ name: "Keeper", job: "Stay" });
+    const doomed = team.hire({ name: "Doomed", job: "Go" });
+    team.createRoutine({
+      botId: doomed.id,
+      name: "Nightly",
+      instruction: "Clean up",
+    });
+    team.appendMessage({ botId: doomed.id, role: "user", text: "hello" });
+    expect(team.listRoutines(doomed.id)).toHaveLength(1);
+    expect(team.chat(doomed.id)).toHaveLength(1);
+    expect(team.focusedBotId).toBe(doomed.id);
+
+    team.fire(doomed.id);
+    expect(team.getBot(doomed.id)).toBeUndefined();
+    expect(team.listBots().map((bot) => bot.id)).toEqual([keeper.id]);
+    expect(team.listRoutines()).toEqual([]);
+    expect(team.snapshot().chats[doomed.id]).toBeUndefined();
+    expect(team.focusedBotId).toBe(keeper.id);
+  });
+
+  it("updates hired bot name, job, and instructions", () => {
+    const team = new Team();
+    const bot = team.hire({ name: "Draft", job: "Old job", instructions: "Be brief" });
+    const updated = team.updateBot({
+      botId: bot.id,
+      name: "Final",
+      job: "New job",
+      instructions: "Be thorough",
+    });
+    expect(updated.name).toBe("Final");
+    expect(updated.job).toBe("New job");
+    expect(updated.instructions).toBe("Be thorough");
+    expect(team.getBot(bot.id)?.name).toBe("Final");
+  });
+
+  it("stores and updates a routine cron schedule", () => {
+    const team = new Team();
+    const bot = team.hire({ name: "Ops", job: "Keep time" });
+    const routine = team.createRoutine({
+      botId: bot.id,
+      name: "Standup",
+      instruction: "Post standup",
+    });
+    expect(routine.schedule).toBeUndefined();
+    const cron = "30 8 * * 1-5";
+    const updated = team.updateRoutine({ routineId: routine.id, schedule: cron });
+    expect(updated.schedule).toBe(cron);
+    expect(team.getRoutine(routine.id).schedule).toBe(cron);
+    const cleared = team.updateRoutine({ routineId: routine.id, schedule: "" });
+    expect(cleared.schedule).toBeUndefined();
+  });
 });

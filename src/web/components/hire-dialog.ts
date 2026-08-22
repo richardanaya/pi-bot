@@ -1,9 +1,11 @@
-import { LitElement, css, html } from "lit";
+import { LitElement, css, html, type PropertyValues } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
+import type { Bot } from "../../shared/types.js";
 
 @customElement("hire-dialog")
 export class HireDialog extends LitElement {
   @property({ type: Boolean, reflect: true }) open = false;
+  @property({ attribute: false }) bot: Bot | null = null;
   @state() private name = "";
   @state() private job = "";
   @state() private instructions = "";
@@ -15,6 +17,11 @@ export class HireDialog extends LitElement {
     :host([open]) {
       display: contents;
     }
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+    }
     .backdrop {
       position: fixed;
       inset: 0;
@@ -24,7 +31,7 @@ export class HireDialog extends LitElement {
       z-index: 20;
     }
     form {
-      width: min(440px, calc(100vw - 32px));
+      width: min(560px, calc(100vw - 48px));
       background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 16px;
@@ -79,15 +86,29 @@ export class HireDialog extends LitElement {
     }
   `;
 
+  protected updated(changed: PropertyValues<this>): void {
+    if (changed.has("open") && this.open) this.fillFromBot();
+  }
+
+  private fillFromBot() {
+    this.name = this.bot?.name ?? "";
+    this.job = this.bot?.job ?? "";
+    this.instructions = this.bot?.instructions ?? "";
+  }
+
   render() {
     if (!this.open) return html``;
+    const editing = Boolean(this.bot);
     return html`
       <div class="backdrop" @click=${this.onBackdrop}>
         <form data-testid="hire-dialog" @click=${stop} @submit=${this.onSubmit}>
-          <h2>Hire a bot</h2>
+          <h2>${editing ? "Edit bot" : "Hire a bot"}</h2>
           <p>
-            Give it a name and a job. It gets its own pi session and can message the rest of the
-            team.
+            ${
+              editing
+                ? "Update this teammate’s name, job, and standing instructions."
+                : "Give it a name and a job. It gets its own pi session and can message the rest of the team."
+            }
           </p>
           <label>
             Name
@@ -108,7 +129,9 @@ export class HireDialog extends LitElement {
           </label>
           <div class="actions">
             <button class="cancel" type="button" @click=${this.onCancel}>Cancel</button>
-            <button class="submit" data-testid="hire-submit" type="submit">Hire</button>
+            <button class="submit" data-testid="hire-submit" type="submit">
+              ${editing ? "Save" : "Hire"}
+            </button>
           </div>
         </form>
       </div>
@@ -132,16 +155,21 @@ export class HireDialog extends LitElement {
   }
   private onSubmit(event: Event) {
     event.preventDefault();
-    this.dispatchEvent(
-      new CustomEvent("hire", {
-        detail: { name: this.name, job: this.job, instructions: this.instructions },
-        bubbles: true,
-        composed: true,
-      }),
-    );
-    this.name = "";
-    this.job = "";
-    this.instructions = "";
+    const detail = { name: this.name, job: this.job, instructions: this.instructions };
+    if (this.bot) {
+      this.dispatchEvent(
+        new CustomEvent("save", {
+          detail: { ...detail, botId: this.bot.id },
+          bubbles: true,
+          composed: true,
+        }),
+      );
+    } else {
+      this.dispatchEvent(new CustomEvent("hire", { detail, bubbles: true, composed: true }));
+      this.name = "";
+      this.job = "";
+      this.instructions = "";
+    }
   }
 }
 

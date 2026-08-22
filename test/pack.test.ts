@@ -11,7 +11,17 @@ describe("npm pack", () => {
     const raw = execFileSync("npm", ["pack", "--dry-run", "--json", "--ignore-scripts"], {
       encoding: "utf8",
     });
-    const listing = JSON.parse(raw) as Array<{ files: Array<{ path: string; mode: number }> }>;
+    const listing = JSON.parse(raw) as Array<{
+      name: string;
+      files: Array<{ path: string; mode: number }>;
+    }>;
+    expect(listing[0]?.name).toBe("@richardanaya/pi-bot");
+    const pkg = JSON.parse(readFileSync("package.json", "utf8")) as {
+      name: string;
+      publishConfig?: { access?: string };
+    };
+    expect(pkg.name).toBe("@richardanaya/pi-bot");
+    expect(pkg.publishConfig?.access).toBe("public");
     const files = listing[0]?.files ?? [];
     const paths = files.map((file) => file.path);
 

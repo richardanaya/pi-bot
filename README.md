@@ -17,7 +17,7 @@ You hire named teammates, talk to the one you are focused on, save routines for 
 Requires Node 22+ and a working pi setup under `~/.pi` (auth, models, settings).
 
 ```bash
-npx pi-bot
+npx @richardanaya/pi-bot
 ```
 
 Then open `http://127.0.0.1:3141`. The process binds localhost only.
@@ -35,7 +35,7 @@ npm start
 ### Demo UI (no model calls)
 
 ```bash
-npx pi-bot --demo
+npx @richardanaya/pi-bot --demo
 ```
 
 Demo mode still uses the real hire/roster/routine/handoff backend. It only stubs the model so you can click around, attach media, and watch markdown render.
@@ -50,7 +50,7 @@ pi-bot keeps those essentials:
 | -------------------------------- | ------------------------------------------------------ |
 | Hire a named bot with a job      | Left pane **Hire** (or `pi_bot_hire`)                  |
 | Chat with the focused teammate   | Middle pane, one conversation per bot                  |
-| Teach / reuse a workflow         | Right pane **routines** (named instruction, run later) |
+| Teach / reuse a workflow         | Right pane **routines** (bots save them; you set cron) |
 | Bots message each other          | `pi_bot_message` handoff appears on the receiving chat |
 | Shared computer / remote desktop | Out of scope for this MVP                              |
 
@@ -63,7 +63,7 @@ Every session is given extra tools whose names start with `pi_bot_`:
 - `pi_bot_hire` — hire a specialist onto the shared roster
 - `pi_bot_list` — list the team
 - `pi_bot_message` — hand a task to another bot (shows up as an inbound handoff in their chat)
-- `pi_bot_save_routine` / `pi_bot_run_routine` / `pi_bot_list_routines` — reusable instructions bound to a bot
+- `pi_bot_save_routine` / `pi_bot_run_routine` / `pi_bot_list_routines` — reusable instructions bound to a bot (optional 5-field cron)
 
 Handoffs are hop-limited so bots cannot loop forever.
 
@@ -78,7 +78,7 @@ The focused chat is a Lit web component. It renders GitHub-flavored markdown, in
 ## CLI
 
 ```
-npx pi-bot [options]
+npx @richardanaya/pi-bot [options]
 
   --host <addr>       default 127.0.0.1
   --port <n>          default 3141 (0 = ephemeral)
@@ -88,6 +88,8 @@ npx pi-bot [options]
   --agent-dir <dir>   pi config (default ~/.pi/agent)
   --open              open a browser
 ```
+
+Type `@Name` in the composer (for example `Hey @PoemMaker, make a poem`) to hand the rest of the message to that hired bot. Inter-bot traffic shows as a compact row you can expand, not a full chat bubble.
 
 Frontend and backend talk over a **WebSocket** at `/ws` (hire, focus, prompt, routines, live events). HTTP is only used to serve the UI, `/health`, and media uploads.
 
@@ -112,14 +114,14 @@ npm run format
 
 ## Publish
 
-The package name `pi-bot` is public on npm. `prepack` builds `dist/` so a publish always ships the CLI and bundled UI.
+The package is `@richardanaya/pi-bot` and publishes **public** (`publishConfig.access`). `prepack` builds `dist/` so a publish always ships the CLI and bundled UI.
 
 ```bash
 npm login
-npm publish
+npm publish --access public
 ```
 
-After that, `npx pi-bot` installs from the registry.
+After that, `npx @richardanaya/pi-bot` installs from the registry. The `pi-bot` binary is still on PATH after a global install.
 
 ## License
 

@@ -8,6 +8,7 @@ import { MediaStore } from "./media-store.js";
 import { createPiRuntimeFactory } from "./pi-runtime.js";
 import { resolveAgentDir } from "./pi-session.js";
 import { SessionPool } from "./pool.js";
+import { startRoutineScheduler } from "./scheduler.js";
 import { persistTeam } from "./store.js";
 import { Team } from "./team.js";
 import { attachWebsocket } from "./ws.js";
@@ -63,6 +64,16 @@ export async function startPiBot(options: StartOptions = {}): Promise<RunningSer
   });
 
   const sockets = attachWebsocket(server, { team, pool, demo, cwd, agentDir });
+  const stopScheduler = startRoutineScheduler(team, (routineId) => {
+    try {
+      const { routine } = team.runRoutine(routineId);
+      void pool.prompt(routine.botId, routine.instruction).catch(() => {
+        team.setStatus(routine.botId, "error", "Routine run failed");
+      });
+    } catch {
+      // routine may have been deleted between tick and run
+    }
+  });
   const port = await listen(server, host, requestedPort);
   const url = `http://${host}:${port}`;
 
@@ -72,7 +83,7 @@ export async function startPiBot(options: StartOptions = {}): Promise<RunningSer
     port,
     demo,
     agentDir,
-    close: () => closeServer(server, sockets.close, pool),
+    close: () => closeServer(server, sockets.close, pool, stopScheduler),
   };
 }
 
@@ -80,7 +91,9 @@ async function closeServer(
   server: Server,
   closeSockets: () => Promise<void>,
   pool: SessionPool,
+  stopScheduler: () => void,
 ): Promise<void> {
+  stopScheduler();
   pool.dispose();
   await closeSockets();
   server.closeAllConnections();

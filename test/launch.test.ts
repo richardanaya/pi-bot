@@ -107,6 +107,18 @@ async function runLaunch(botName: string): Promise<{
       expect(created.routine.instruction).toBe(instruction);
       expect(created.routine.botId).toBe(hired.bot.id);
 
+      const cron = "0 9 * * *";
+      send(ws, { type: "update_routine", routineId: created.routine.id, schedule: cron });
+      const updated = await waitFor(
+        ws,
+        (frame) =>
+          frame.type === "routine" &&
+          frame.routine.id === created.routine.id &&
+          frame.routine.schedule === cron,
+      );
+      if (updated.type !== "routine") throw new Error("expected routine");
+      expect(updated.routine.schedule).toBe(cron);
+
       const snapshot = await fetchSnapshot(port);
       return {
         botName,

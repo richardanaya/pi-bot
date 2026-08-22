@@ -6,8 +6,8 @@ import type { Bot, Routine } from "../../shared/types.js";
 export class RoutineList extends LitElement {
   @property({ attribute: false }) bot: Bot | null = null;
   @property({ attribute: false }) routines: Routine[] = [];
-  @state() private name = "";
-  @state() private instruction = "";
+  @property({ type: Boolean }) ready = false;
+  @state() private scheduleId: string | null = null;
 
   static styles = css`
     :host {
@@ -27,32 +27,6 @@ export class RoutineList extends LitElement {
       text-transform: uppercase;
       color: var(--muted);
     }
-    form {
-      display: grid;
-      gap: 8px;
-      padding: 8px 16px 16px;
-      border-bottom: 1px solid var(--line);
-    }
-    input,
-    textarea {
-      width: 100%;
-      background: var(--bg);
-      color: inherit;
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      padding: 8px 10px;
-    }
-    button {
-      border: 0;
-      border-radius: 10px;
-      padding: 8px 10px;
-      cursor: pointer;
-    }
-    button.create {
-      background: var(--panel-2);
-      color: var(--text);
-      font-weight: 650;
-    }
     .list {
       overflow: auto;
       padding: 12px;
@@ -61,14 +35,24 @@ export class RoutineList extends LitElement {
       gap: 8px;
     }
     .card {
+      position: relative;
       background: var(--panel-2);
       border: 1px solid var(--line);
       border-radius: 12px;
       padding: 12px;
     }
+    .card-head {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 6px;
+      min-height: 22px;
+    }
     .card h3 {
-      margin: 0 0 6px;
+      margin: 0;
       font-size: 14px;
+      flex: 1;
+      min-width: 0;
     }
     .card p {
       margin: 0 0 10px;
@@ -78,16 +62,55 @@ export class RoutineList extends LitElement {
     }
     .actions {
       display: flex;
-      gap: 8px;
+      gap: 2px;
+      opacity: 0;
     }
-    button.run {
-      background: var(--accent);
-      color: #0b1220;
-      font-weight: 650;
+    .card:hover .actions,
+    .card:focus-within .actions,
+    .card.editing .actions {
+      opacity: 1;
     }
-    button.delete {
+    button.run,
+    button.delete,
+    button.clock {
+      border: 0;
       background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: 6px;
+      font-size: 13px;
+      line-height: 1;
+    }
+    button.clock.open,
+    button.clock:hover,
+    button.run:hover {
+      color: var(--text);
+      background: var(--bg);
+    }
+    button.delete:hover {
       color: var(--danger);
+      background: var(--bg);
+    }
+    .schedule-pop {
+      margin-top: 8px;
+      display: grid;
+      gap: 4px;
+    }
+    .schedule-pop span {
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .schedule-pop input {
+      width: 100%;
+      background: var(--bg);
+      color: inherit;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-size: 13px;
     }
     .empty {
       color: var(--muted);
@@ -101,33 +124,15 @@ export class RoutineList extends LitElement {
       <header>
         <h1>Routines</h1>
       </header>
-      <form @submit=${this.onCreate}>
-        <input
-          data-testid="routine-name"
-          placeholder="Routine name"
-          .value=${this.name}
-          ?disabled=${!this.bot}
-          @input=${this.onName}
-        />
-        <textarea
-          data-testid="routine-instruction"
-          rows="3"
-          placeholder="Instruction to run later"
-          .value=${this.instruction}
-          ?disabled=${!this.bot}
-          @input=${this.onInstruction}
-        ></textarea>
-        <button class="create" data-testid="routine-create" ?disabled=${!this.bot}>
-          Save routine
-        </button>
-      </form>
       <div class="list" data-testid="routines-pane">
         ${
-          !this.bot
-            ? html`<div class="empty">Focus a bot to bind routines to it.</div>`
-            : this.routines.length === 0
-              ? html`<div class="empty">No routines for ${this.bot.name} yet.</div>`
-              : this.routines.map((routine) => this.card(routine))
+          !this.ready
+            ? html`<div class="empty">Loading…</div>`
+            : !this.bot
+              ? html`<div class="empty">Focus a bot to see its routines.</div>`
+              : this.routines.length === 0
+                ? html`<div class="empty">No routines for ${this.bot.name} yet.</div>`
+                : this.routines.map((routine) => this.card(routine))
         }
       </div>
     `;
@@ -135,43 +140,81 @@ export class RoutineList extends LitElement {
 
   private card(routine: Routine) {
     return html`
-      <div class="card" data-testid="routine-row">
-        <h3>${routine.name}</h3>
-        <p>${routine.instruction}</p>
-        <div class="actions">
-          <button class="run" data-testid="routine-run" @click=${() => this.onRun(routine.id)}>
-            Run
-          </button>
-          <button class="delete" @click=${() => this.onDelete(routine.id)}>Delete</button>
+      <div
+        class="card ${this.scheduleId === routine.id ? "editing" : ""}"
+        data-testid="routine-row"
+      >
+        <div class="card-head">
+          <h3>${routine.name}</h3>
+          <div class="actions">
+            <button
+              class="clock ${this.scheduleId === routine.id ? "open" : ""}"
+              data-testid="routine-clock"
+              title="Schedule"
+              aria-label="Schedule"
+              @click=${() => this.onToggleSchedule(routine.id)}
+            >
+              ⏱
+            </button>
+            <button
+              class="run"
+              data-testid="routine-run"
+              title="Run"
+              aria-label="Run"
+              @click=${() => this.onRun(routine.id)}
+            >
+              ▶
+            </button>
+            <button
+              class="delete"
+              data-testid="routine-delete"
+              title="Delete"
+              aria-label="Delete"
+              @click=${() => this.onDelete(routine.id)}
+            >
+              ×
+            </button>
+          </div>
         </div>
+        <p>${routine.instruction}</p>
+        ${
+          this.scheduleId === routine.id
+            ? html`<label class="schedule-pop">
+                <span>Cron</span>
+                <input
+                  data-testid="routine-schedule"
+                  placeholder="0 9 * * * · blank = manual"
+                  .value=${routine.schedule ?? ""}
+                  @change=${(event: Event) => this.onSchedule(routine.id, event)}
+                />
+              </label>`
+            : null
+        }
       </div>
     `;
   }
 
-  private onName(event: Event) {
-    this.name = (event.target as HTMLInputElement).value;
+  private onToggleSchedule(routineId: string) {
+    this.scheduleId = this.scheduleId === routineId ? null : routineId;
   }
-  private onInstruction(event: Event) {
-    this.instruction = (event.target as HTMLTextAreaElement).value;
-  }
-  private onCreate(event: Event) {
-    event.preventDefault();
-    if (!this.bot) return;
+
+  private onSchedule(routineId: string, event: Event) {
+    const schedule = (event.target as HTMLInputElement).value;
     this.dispatchEvent(
-      new CustomEvent("create-routine", {
-        detail: { botId: this.bot.id, name: this.name, instruction: this.instruction },
+      new CustomEvent("update-routine", {
+        detail: { routineId, schedule },
         bubbles: true,
         composed: true,
       }),
     );
-    this.name = "";
-    this.instruction = "";
   }
+
   private onRun(routineId: string) {
     this.dispatchEvent(
       new CustomEvent("run-routine", { detail: { routineId }, bubbles: true, composed: true }),
     );
   }
+
   private onDelete(routineId: string) {
     this.dispatchEvent(
       new CustomEvent("delete-routine", { detail: { routineId }, bubbles: true, composed: true }),

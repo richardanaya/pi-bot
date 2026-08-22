@@ -20,6 +20,7 @@ export function createPiRuntimeFactory(
       });
       const session = started.session;
       const streaming = new Map<string, string>();
+      const toolMessages = new Map<string, string>();
 
       const unsubscribe = session.subscribe((event) => {
         if (event.type === "agent_start") {
@@ -48,12 +49,36 @@ export function createPiRuntimeFactory(
           }
         }
         if (event.type === "tool_execution_start") {
-          team.appendMessage({
+          const message = team.appendMessage({
             botId: bot.id,
             role: "tool",
-            text: `Using ${event.toolName}`,
+            text: event.toolName,
             toolName: event.toolName,
+            toolCallId: event.toolCallId,
+            toolInput: event.args,
           });
+          toolMessages.set(event.toolCallId, message.id);
+        }
+        if (event.type === "tool_execution_end") {
+          const messageId = toolMessages.get(event.toolCallId);
+          if (messageId) {
+            team.updateMessage(bot.id, messageId, {
+              toolOutput: event.result,
+              toolError: event.isError,
+              text: event.toolName,
+            });
+            toolMessages.delete(event.toolCallId);
+          } else {
+            team.appendMessage({
+              botId: bot.id,
+              role: "tool",
+              text: event.toolName,
+              toolName: event.toolName,
+              toolCallId: event.toolCallId,
+              toolOutput: event.result,
+              toolError: event.isError,
+            });
+          }
         }
         if (event.type === "agent_end" || event.type === "agent_settled") {
           const messageId = streaming.get(bot.id);

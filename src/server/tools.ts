@@ -74,18 +74,24 @@ export function createPiBotTools(team: Team, fromBotId: string): PiBotTool[] {
       name: `${PI_BOT_TOOL_PREFIX}save_routine`,
       label: "Save routine",
       description:
-        "Save a named instruction as a reusable routine for a bot (defaults to yourself).",
+        "Save a named instruction as a reusable routine for a bot (defaults to yourself). Optional 5-field cron schedule.",
       promptSnippet: "Save a reusable routine for a bot",
       parameters: Type.Object({
         name: Type.String({ description: "Routine name" }),
         instruction: Type.String({ description: "The prompt/instruction to run later" }),
         bot: Type.Optional(Type.String({ description: "Bot id or name; defaults to you" })),
+        schedule: Type.Optional(
+          Type.String({
+            description: "5-field cron (minute hour day month weekday); omit for manual",
+          }),
+        ),
       }),
       execute: async (params) => {
         const routine = executePiBotSaveRoutine(team, fromBotId, {
           name: String(params.name ?? ""),
           instruction: String(params.instruction ?? ""),
           bot: optionalString(params.bot),
+          schedule: optionalString(params.schedule),
         });
         return { text: JSON.stringify(routine, null, 2) };
       },
@@ -169,13 +175,14 @@ export function executePiBotMessage(
 export function executePiBotSaveRoutine(
   team: Team,
   fromBotId: string,
-  params: { name: string; instruction: string; bot?: string },
+  params: { name: string; instruction: string; bot?: string; schedule?: string },
 ) {
   const owner = params.bot ? team.resolveBot(params.bot) : team.requireBot(fromBotId);
   return team.createRoutine({
     botId: owner.id,
     name: params.name,
     instruction: params.instruction,
+    schedule: params.schedule,
   });
 }
 

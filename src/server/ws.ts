@@ -1,6 +1,7 @@
 import type { IncomingMessage } from "node:http";
 import { WebSocketServer, type WebSocket } from "ws";
 import { encodeFrame, parseClientFrame, type ServerFrame } from "../shared/protocol.js";
+import { dispatchComposerSend } from "./dispatch.js";
 import type { SessionPool } from "./pool.js";
 import type { Team } from "./team.js";
 
@@ -50,6 +51,12 @@ export function attachWebsocket(
         break;
       case "routine_removed":
         broadcast({ type: "routine_removed", routineId: event.routineId });
+        break;
+      case "group":
+        broadcast({ type: "group", group: event.group });
+        break;
+      case "group_removed":
+        broadcast({ type: "group_removed", groupId: event.groupId });
         break;
       default:
         break;
@@ -111,6 +118,14 @@ async function handleFrame(
       }
       return;
     }
+    case "update_bot":
+      team.updateBot({
+        botId: frame.botId,
+        name: frame.name,
+        job: frame.job,
+        instructions: frame.instructions,
+      });
+      return;
     case "fire":
       team.fire(frame.botId);
       return;
@@ -127,14 +142,14 @@ async function handleFrame(
       }
       return;
     case "prompt": {
-      team.resetHops(frame.botId);
-      team.appendMessage({
-        botId: frame.botId,
-        role: "user",
+      const result = dispatchComposerSend(team, {
+        fromBotId: frame.botId,
         text: frame.text,
         attachments: frame.attachments,
       });
-      await pool.prompt(frame.botId, frame.text, frame.attachments);
+      if (result.kind === "prompt") {
+        await pool.prompt(result.botId, result.text, result.attachments);
+      }
       return;
     }
     case "abort":
@@ -145,7 +160,11 @@ async function handleFrame(
         botId: frame.botId,
         name: frame.name,
         instruction: frame.instruction,
+        schedule: frame.schedule,
       });
+      return;
+    case "update_routine":
+      team.updateRoutine({ routineId: frame.routineId, schedule: frame.schedule });
       return;
     case "run_routine": {
       const { routine } = team.runRoutine(frame.routineId);
@@ -154,6 +173,23 @@ async function handleFrame(
     }
     case "delete_routine":
       team.deleteRoutine(frame.routineId);
+      return;
+    case "pin_bot":
+      team.pinBot(frame.botId, frame.pinned);
+      return;
+    case "create_group": {
+      const group = team.createGroup(frame.name);
+      if (frame.botId) team.assignBotGroup(frame.botId, group.id);
+      return;
+    }
+    case "assign_bot_group":
+      team.assignBotGroup(frame.botId, frame.groupId);
+      return;
+    case "collapse_group":
+      team.setGroupCollapsed(frame.groupId, frame.collapsed);
+      return;
+    case "delete_group":
+      team.deleteGroup(frame.groupId);
       return;
     default:
       throw new Error("Unknown client frame");

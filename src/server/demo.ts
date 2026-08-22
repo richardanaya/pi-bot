@@ -18,6 +18,15 @@ export function createDemoFactory(
           aborted = false;
           team.setStatus(botId, "working");
           const bot = team.requireBot(botId);
+          team.appendMessage({
+            botId,
+            role: "tool",
+            text: "read",
+            toolName: "read",
+            toolCallId: newId("tool"),
+            toolInput: { path: "notes.md" },
+            toolOutput: { content: input.text },
+          });
           const reply = demoReply(bot.name, input, media);
           const message = team.appendMessage({
             botId,
